@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-cd /home/steam/games/game/bin/linuxsteamrt64
+cd $HOME/games/game/bin/linuxsteamrt64
+HOSTED_WORKSHOP_COLLECTION_ID=3171582798
 
 # dedicated launches a server
 # usercon allows rcon
@@ -17,5 +18,5 @@ cd /home/steam/games/game/bin/linuxsteamrt64
     -threads 4 \
     -maxplayers 64 \
     +game_alias casual \
-    +host_workshop_collection 3171582798 \
+    +host_workshop_collection $HOSTED_WORKSHOP_COLLECTION_ID \
     +map de_dust2
