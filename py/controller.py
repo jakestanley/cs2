@@ -15,7 +15,9 @@ class Controller:
         print(response)
 
     def change_map(self, map: Map, mode: str):
+        print(f"Sending RCON request to change to map '{map.name}' and game alias '{mode}'")
+
         with Client(self.host, int(self.port), passwd=self.password) as client:
-            response = client.run('host_workshop_map', map.id)
+            response = client.run('game_alias', mode, ';', 'host_workshop_map', map.id)
 
         print(response)

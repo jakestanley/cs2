@@ -1,3 +1,4 @@
+import functools
 from typing import List
 
 from PyQt6.QtWidgets import QDialog, QVBoxLayout, QHBoxLayout, \
@@ -25,15 +26,15 @@ class MapWidget(QWidget):
         self.workshop_button.setEnabled(self.map.workshop)
         self.workshop_button.clicked.connect(self.open_workshop)
 
-        self.dm_button = QPushButton("Deathmatch")
-        self.dm_button.setEnabled(True)
-        self.dm_button.clicked.connect(lambda: controller.change_map(self.map, "deathmatch"))
-        
         layout = QHBoxLayout()
+
         layout.addWidget(self.label_name)
         layout.addWidget(self.workshop_button)
-        layout.addWidget(self.dm_button)
-        
+
+        for mode in MODES:
+            mode_button = QPushButton(mode.capitalize())
+            mode_button.clicked.connect(functools.partial(lambda mode: controller.change_map(self.map, mode), mode))
+            layout.addWidget(mode_button)
 
         self.setLayout(layout)
 
