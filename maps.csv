@@ -1,0 +1,13 @@
+workshop,id,name,modes
+yes,3070594412,cs_assault,deathmatch
+yes,3127729110,de_dust,deathmatch
+yes,3070550406,de_safehouse,deathmatch
+yes,3070547153,ar_monastery,deathmatch
+yes,3070553020,ar_dizzy,deathmatch
+yes,3089953774,cs_militia,deathmatch
+yes,3138535781,cs_compound,deathmatch
+yes,3070584943,cs_agency,deathmatch|armsrace
+yes,3070579459,de_sugarcane,deathmatch
+yes,3070563536,de_lake,deathmatch|armsrace
+no,de_dust2,de_dust2,deathmatch|casual|competitive
+no,cs_office,cs_office,deathmatch|casual|competitive
