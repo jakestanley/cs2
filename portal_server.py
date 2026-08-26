@@ -10,6 +10,7 @@ from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
 from cs2.config import DEFAULT_CONFIG_PATH, load_config
+import registry
 
 
 def detect_primary_ip() -> str:
@@ -188,6 +189,28 @@ class RootRewriteHandler(SimpleHTTPRequestHandler):
         self._default_file = default_file
         super().__init__(*args, directory=directory, **kwargs)
 
+    def _send_json(self, status: int, payload) -> None:
+        body = json.dumps(payload).encode("utf-8")
+        self.send_response(status)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
+    def _read_json_body(self) -> dict:
+        content_length = self.headers.get("Content-Length")
+        if not content_length:
+            return {}
+        try:
+            raw = self.rfile.read(int(content_length))
+        except ValueError:
+            return {}
+        try:
+            data = json.loads(raw.decode("utf-8"))
+        except (json.JSONDecodeError, UnicodeDecodeError):
+            return {}
+        return data if isinstance(data, dict) else {}
+
     def _proxy_request(self, variant: dict, upstream_path: str) -> None:
         body = None
         content_length = self.headers.get("Content-Length")
@@ -282,6 +305,9 @@ class RootRewriteHandler(SimpleHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(body)
             return
+        if path == "/api/servers":
+            self._send_json(200, registry.list_active())
+            return
         if self._try_proxy():
             return
         if path in {"", "/"}:
@@ -289,6 +315,45 @@ class RootRewriteHandler(SimpleHTTPRequestHandler):
         return super().do_GET()
 
     def do_POST(self):
+        path = self.path.split("?", 1)[0]
+        if path == "/api/register":
+            payload = self._read_json_body()
+            try:
+                registry.register(payload)
+            except ValueError as exc:
+                self._send_json(400, {"ok": False, "error": str(exc)})
+                return
+            self._send_json(200, {"ok": True})
+            return
+        if path.startswith("/api/servers/") and "/actions/" in path:
+            _, _, remainder = path.partition("/api/servers/")
+            server_id, _, action = remainder.partition("/actions/")
+            entry = registry.get(server_id)
+            if entry is None:
+                self._send_json(404, {"ok": False, "error": f"unknown server: {server_id}"})
+                return
+            if action not in entry["actions"]:
+                self._send_json(400, {"ok": False, "error": f"unsupported action: {action}"})
+                return
+            request = Request(
+                f"{entry['base_url']}/arcade/actions/{action}",
+                data=b"{}",
+                headers={"Content-Type": "application/json"},
+                method="POST",
+            )
+            try:
+                with urlopen(request, timeout=15) as response:
+                    body = response.read()
+                    status = response.status
+            except URLError as exc:
+                self._send_json(502, {"ok": False, "error": f"adapter unreachable: {exc}"})
+                return
+            try:
+                payload = json.loads(body.decode("utf-8"))
+            except (json.JSONDecodeError, UnicodeDecodeError):
+                payload = {"ok": status < 400}
+            self._send_json(status, payload)
+            return
         if self._try_proxy():
             return
         self.send_error(405)

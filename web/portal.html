@@ -16,14 +16,25 @@
       </header>
 
       <section class="grid" id="variant-grid"></section>
+
+      <header>
+        <div>
+          <div class="subtitle">Registered Servers</div>
+          <h1>Managed Servers</h1>
+        </div>
+      </header>
+      <section class="grid" id="server-grid"></section>
     </div>
     <script>
       const grid = document.getElementById("variant-grid");
+      const serverGrid = document.getElementById("server-grid");
       const statusLabels = {
         live: "Live",
         starting: "Starting",
         offline: "Offline",
       };
+      const serverStateMap = { running: "live", stopped: "offline", unknown: "starting" };
+      const actionLabels = { start: "Start", stop: "Stop" };
 
       const normalizePath = (path) => {
         const base = path && path.startsWith("/") ? path : `/${path || ""}`;
@@ -92,8 +103,92 @@
         }
       };
 
+      const runServerAction = async (serverId, action, button) => {
+        button.disabled = true;
+        const original = button.textContent;
+        button.textContent = "…";
+        try {
+          const res = await fetch(`/api/servers/${encodeURIComponent(serverId)}/actions/${encodeURIComponent(action)}`, {
+            method: "POST",
+          });
+          await res.json().catch(() => ({}));
+        } catch (err) {
+          // ignore — next poll will reflect real state
+        } finally {
+          button.disabled = false;
+          button.textContent = original;
+          refreshServers();
+        }
+      };
+
+      const renderServers = (servers) => {
+        serverGrid.innerHTML = "";
+        if (!servers.length) {
+          const card = document.createElement("div");
+          card.className = "card";
+          const message = document.createElement("p");
+          message.className = "pending";
+          message.textContent = "No servers registered.";
+          card.appendChild(message);
+          serverGrid.appendChild(card);
+          return;
+        }
+
+        servers.forEach((server) => {
+          const card = document.createElement("div");
+          card.className = "card";
+
+          const header = document.createElement("div");
+          header.className = "card-header";
+
+          const title = document.createElement("h2");
+          title.textContent = server.name || server.id;
+
+          const status = document.createElement("span");
+          const state = serverStateMap[server.status] || "starting";
+          status.className = `status-pill ${state}`;
+          status.textContent = statusLabels[state] || server.status || "Unknown";
+
+          header.appendChild(title);
+          header.appendChild(status);
+
+          const description = document.createElement("p");
+          description.className = "pending";
+          description.textContent = server.description || "";
+
+          const controls = document.createElement("div");
+          controls.className = "controls";
+
+          (server.actions || []).forEach((action) => {
+            const button = document.createElement("button");
+            button.className = "link-button";
+            button.textContent = actionLabels[action] || action;
+            button.addEventListener("click", () => runServerAction(server.id, action, button));
+            controls.appendChild(button);
+          });
+
+          card.appendChild(header);
+          card.appendChild(description);
+          card.appendChild(controls);
+          serverGrid.appendChild(card);
+        });
+      };
+
+      const refreshServers = async () => {
+        try {
+          const res = await fetch("/api/servers");
+          if (!res.ok) return;
+          const servers = await res.json();
+          renderServers(Array.isArray(servers) ? servers : []);
+        } catch (err) {
+          return;
+        }
+      };
+
       refreshVariants();
+      refreshServers();
       setInterval(refreshVariants, 4000);
+      setInterval(refreshServers, 4000);
     </script>
   </body>
 </html>
