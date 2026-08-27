@@ -73,8 +73,11 @@ class RootRewriteHandler(SimpleHTTPRequestHandler):
                 headers={"Content-Type": "application/json"},
                 method="POST",
             )
+            # Generous timeout: an adapter action (e.g. a container stop)
+            # can legitimately take as long as that service's own graceful
+            # shutdown grace period, which may be 30s+.
             try:
-                with urlopen(request, timeout=15) as response:
+                with urlopen(request, timeout=45) as response:
                     body = response.read()
                     status = response.status
             except URLError as exc:
@@ -84,6 +87,8 @@ class RootRewriteHandler(SimpleHTTPRequestHandler):
                 payload = json.loads(body.decode("utf-8"))
             except (json.JSONDecodeError, UnicodeDecodeError):
                 payload = {"ok": status < 400}
+            if payload.get("ok") and payload.get("status"):
+                registry.update_status(server_id, str(payload["status"]))
             self._send_json(status, payload)
             return
         self.send_error(405)

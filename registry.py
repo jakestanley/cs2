@@ -49,6 +49,18 @@ def list_active() -> list[dict]:
     return active
 
 
+def update_status(server_id: str, status: str) -> None:
+    """Opportunistic refresh after a successful action call — avoids the
+    up-to-90s staleness of waiting for the next heartbeat. A successful
+    action call is itself proof of liveness, same as a heartbeat, so this
+    also bumps last_seen."""
+    with _lock:
+        entry = _registrations.get(server_id)
+        if entry is not None:
+            entry["status"] = status
+            entry["last_seen"] = time.time()
+
+
 def get(server_id: str) -> dict | None:
     cutoff = time.time() - STALE_AFTER_SECONDS
     with _lock:
