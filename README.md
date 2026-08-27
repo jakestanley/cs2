@@ -5,16 +5,18 @@ other services). Pure presentation and API aggregation: it does not manage Docke
 any game process directly, and needs no elevated host access anywhere.
 
 Server management lives entirely in each managed server's own **adapter** — a small HTTP service,
-owned by that server's own repo, that exposes `GET /arcade/info` and `POST /arcade/actions/<action>`
-and heartbeat-registers itself with this portal. See `docs/ARCADE_CONTRACT.md` for the full contract,
-and `docker-palworld`'s `arcade/` directory for a reference adapter implementation.
+in its own standalone `arcade-<game>` repo (e.g. `arcade-palworld`, controlling `docker-palworld`),
+that exposes `GET /arcade/info` and `POST /arcade/actions/<action>` and heartbeat-registers itself
+with this portal. See `docs/ARCADE_CONTRACT.md` for the full contract.
 
 Ingress and ports are defined by `homelab-infra/registry.yaml` (service name: `arcade`).
 
 ## Run
 
 ```bash
-cp .env.example .env   # only needed to override PORTAL_PORT
+cp .env.example .env
+# set BOT_TOKEN (from @BotFather) and ALLOWED_USER_IDS, or the telegram-bot
+# service will refuse to start / reject every side-effecting command
 ./scripts/up.sh
 ```
 
@@ -23,6 +25,21 @@ cp .env.example .env   # only needed to override PORTAL_PORT
 deployment — no systemd units, no venvs, no sudo.
 
 Open `http://<host>:<portal_port>` for the portal.
+
+## Telegram bot
+
+`telegram-bot/` — a Telegram front-end for the same API the web UI uses, as its own sibling
+Compose service (not a separate repo — see `homelab-standards/PATTERNS/telegram-bot.md`).
+Commands are derived from `/api/servers` at call time, so a new registered game server needs no
+new bot code:
+
+- `/status` — list registered servers and their status (open to anyone).
+- `/start_server <id>` / `/stop_server <id>` — restricted to `ALLOWED_USER_IDS` (comma-separated
+  Telegram user IDs; find yours via @userinfobot). Fails closed — empty/unset means nobody can
+  run these, not everybody.
+
+(`/start` itself is reserved by Telegram for the client's own onboarding message, hence
+`start_server`/`stop_server` rather than plain `start`/`stop`.)
 
 ## API
 

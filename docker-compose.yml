@@ -6,3 +6,13 @@ services:
       PORTAL_PORT: "${PORTAL_PORT:-20032}"
     ports:
       - "${PORTAL_PORT:-20032}:${PORTAL_PORT:-20032}"
+
+  telegram-bot:
+    build: ./telegram-bot
+    restart: unless-stopped
+    depends_on:
+      - portal
+    environment:
+      BOT_TOKEN: "${BOT_TOKEN:?set to a token from @BotFather}"
+      PORTAL_BASE_URL: "http://portal:${PORTAL_PORT:-20032}"
+      ALLOWED_USER_IDS: "${ALLOWED_USER_IDS:-}"
