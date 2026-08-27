@@ -1,7 +1,12 @@
 # CS2 Control Deck
 
 Self-contained CS2 server manager with a web UI for starting/stopping, RCON actions, and map/mode changes.
-Runtime is Windows + NSSM (no Docker); ingress and ports are defined by `homelab-infra/registry.yaml` (service name: `arcade`).
+Ingress and ports are defined by `homelab-infra/registry.yaml` (service name: `arcade`).
+
+The portal (`portal_server.py`) plus the cross-host server registry (see `docs/ARCADE_CONTRACT.md`)
+run on Linux via `systemd` — see "Run as a systemd service (Linux)" below.
+`cs2`/`sandstorm` (which need the actual game installed) remain Windows + NSSM only, since those
+variants shell out to a local game install that doesn't exist on the Linux portal host.
 
 ## Setup
 
@@ -115,6 +120,31 @@ Notes:
 - `scripts/install-service.ps1` defaults `ServiceName` to the repo folder name; the root `install-service.ps1` wrapper defaults `ServiceName=arcade`.
 - Log files are written to `logs/` (created automatically).
 - Reinstall only if you change the repo path, script path, or NSSM config.
+
+## Run as a systemd service (Linux)
+
+Runs just the portal (`scripts/up.sh` → `supervisor.py`) — `cs2`/`sandstorm` still start as
+subprocesses on Linux but report themselves offline since there's no game install to control;
+they're harmless to leave running.
+
+```bash
+cp systemd/homelab-arcade.env.example /etc/homelab-arcade/homelab-arcade.env
+sudo mkdir -p /etc/homelab-arcade && sudo cp systemd/homelab-arcade.env.example /etc/homelab-arcade/homelab-arcade.env
+sudo cp systemd/homelab-arcade.service /etc/systemd/system/homelab-arcade.service
+sudo systemctl daemon-reload
+sudo systemctl enable --now homelab-arcade
+```
+
+`scripts/up.sh` creates its own `.venv`, installs `requirements.txt`, and resolves `PORTAL_PORT`
+from `../homelab-infra/registry.yaml` automatically (override via the env file if needed).
+
+Start/stop/status:
+
+```bash
+sudo systemctl status homelab-arcade
+sudo systemctl restart homelab-arcade
+journalctl -u homelab-arcade -f
+```
 
 ## Notes
 
