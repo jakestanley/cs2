@@ -34,9 +34,12 @@ Commands are derived from `/api/servers` at call time, so a new registered game 
 new bot code:
 
 - `/status` — list registered servers and their status (open to anyone).
-- `/start_server <id>` / `/stop_server <id>` — restricted to `ALLOWED_USER_IDS` (comma-separated
-  Telegram user IDs; find yours via @userinfobot). Fails closed — empty/unset means nobody can
-  run these, not everybody.
+- `/start_server` / `/stop_server` — with no argument, shows a button per server currently
+  eligible for that action (only stopped servers to start, only running ones to stop); an id can
+  still be passed directly (`/start_server arcade-palworld`) to skip the menu. Restricted to
+  `ALLOWED_USER_IDS` (comma-separated Telegram user IDs; find yours via @userinfobot), re-checked
+  on every button press too, not just when the command is run. Fails closed — empty/unset means
+  nobody can run these, not everybody.
 
 (`/start` itself is reserved by Telegram for the client's own onboarding message, hence
 `start_server`/`stop_server` rather than plain `start`/`stop`.)
