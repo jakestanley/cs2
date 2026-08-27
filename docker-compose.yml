@@ -1,0 +1,8 @@
+services:
+  portal:
+    build: .
+    restart: unless-stopped
+    environment:
+      PORTAL_PORT: "${PORTAL_PORT:-20032}"
+    ports:
+      - "${PORTAL_PORT:-20032}:${PORTAL_PORT:-20032}"

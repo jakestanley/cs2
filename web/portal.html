@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Game Server Portal</title>
+    <title>Arcade</title>
     <link rel="stylesheet" href="/shared.css" />
   </head>
   <body>
@@ -11,97 +11,21 @@
       <header>
         <div>
           <div class="subtitle">Server Index</div>
-          <h1>Game Server Portal</h1>
+          <h1>Arcade</h1>
         </div>
       </header>
 
-      <section class="grid" id="variant-grid"></section>
-
-      <header>
-        <div>
-          <div class="subtitle">Registered Servers</div>
-          <h1>Managed Servers</h1>
-        </div>
-      </header>
       <section class="grid" id="server-grid"></section>
     </div>
     <script>
-      const grid = document.getElementById("variant-grid");
       const serverGrid = document.getElementById("server-grid");
       const statusLabels = {
-        live: "Live",
-        starting: "Starting",
-        offline: "Offline",
+        live: "Running",
+        starting: "Unknown",
+        offline: "Stopped",
       };
       const serverStateMap = { running: "live", stopped: "offline", unknown: "starting" };
       const actionLabels = { start: "Start", stop: "Stop" };
-
-      const normalizePath = (path) => {
-        const base = path && path.startsWith("/") ? path : `/${path || ""}`;
-        return base.endsWith("/") ? base : `${base}/`;
-      };
-
-      const renderVariants = (variants) => {
-        grid.innerHTML = "";
-        if (!variants.length) {
-          const card = document.createElement("div");
-          card.className = "card";
-          const message = document.createElement("p");
-          message.className = "pending";
-          message.textContent = "No variants configured.";
-          card.appendChild(message);
-          grid.appendChild(card);
-          return;
-        }
-
-        variants.forEach((variant) => {
-          const card = document.createElement("div");
-          card.className = "card";
-
-          const header = document.createElement("div");
-          header.className = "card-header";
-
-          const title = document.createElement("h2");
-          title.textContent = variant.display_name || variant.id;
-
-          const status = document.createElement("span");
-          const state = variant.status?.state || "starting";
-          status.className = `status-pill ${state}`;
-          status.textContent = statusLabels[state] || "Unknown";
-
-          header.appendChild(title);
-          header.appendChild(status);
-
-          const description = document.createElement("p");
-          description.className = "pending";
-          description.textContent = variant.description || "Game UI";
-
-          const controls = document.createElement("div");
-          controls.className = "controls";
-
-          const link = document.createElement("a");
-          link.className = "link-button";
-          link.href = normalizePath(variant.path || "/");
-          link.textContent = "Open UI";
-
-          controls.appendChild(link);
-          card.appendChild(header);
-          card.appendChild(description);
-          card.appendChild(controls);
-          grid.appendChild(card);
-        });
-      };
-
-      const refreshVariants = async () => {
-        try {
-          const res = await fetch("/api/variants");
-          if (!res.ok) return;
-          const variants = await res.json();
-          renderVariants(Array.isArray(variants) ? variants : []);
-        } catch (err) {
-          return;
-        }
-      };
 
       const runServerAction = async (serverId, action, button) => {
         button.disabled = true;
@@ -185,9 +109,7 @@
         }
       };
 
-      refreshVariants();
       refreshServers();
-      setInterval(refreshVariants, 4000);
       setInterval(refreshServers, 4000);
     </script>
   </body>
