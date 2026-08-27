@@ -34,10 +34,11 @@ Open `http://<host>:<portal_port>` for the portal.
 
 - No authentication — trusts the homelab LAN/VPN, per `homelab-standards/PATTERNS/api.md`'s
   default posture. Do not expose the portal port outside the LAN.
-- Registrations are currently in-memory only (`registry.py`) and expire after 90s without a
-  heartbeat. A server whose adapter stops heartbeating (e.g. the whole host reboots) will
-  disappear from `/api/servers` until its adapter comes back — there's no persistence across a
-  portal restart yet. Worth revisiting if that's a problem in practice.
+- Registrations are in-memory only (`registry.py`), by design: a server whose adapter stops
+  heartbeating (e.g. the whole host goes offline) disappears from `/api/servers` after 90s, and
+  reappears automatically the moment its adapter starts heartbeating again — no manual cleanup,
+  no stale zombie entries, no persistence to carry across a portal restart. This is intentional,
+  not a gap.
 - Legacy `cs2`/`sandstorm` direct-process-management variants (and the static `variants:`
   config mechanism they used) have been removed — that pattern conflated portal presentation
   with per-game server management, which is exactly what the adapter model above replaces.
