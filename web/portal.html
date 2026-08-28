@@ -45,56 +45,111 @@
         }
       };
 
-      const renderServers = (servers) => {
-        serverGrid.innerHTML = "";
-        if (!servers.length) {
-          const card = document.createElement("div");
-          card.className = "card";
-          const message = document.createElement("p");
-          message.className = "pending";
-          message.textContent = "No servers registered.";
-          card.appendChild(message);
-          serverGrid.appendChild(card);
-          return;
-        }
+      // Keyed by server id so a refresh updates existing cards in place
+      // instead of tearing down and recreating the whole grid — a full
+      // rebuild every poll replayed each card's CSS entrance animation,
+      // making the page visibly "bounce" on every refresh.
+      const cardsById = new Map();
+      let emptyCard = null;
 
-        servers.forEach((server) => {
-          const card = document.createElement("div");
-          card.className = "card";
+      const buildCard = (server) => {
+        const card = document.createElement("div");
+        card.className = "card";
 
-          const header = document.createElement("div");
-          header.className = "card-header";
+        const header = document.createElement("div");
+        header.className = "card-header";
 
-          const title = document.createElement("h2");
-          title.textContent = server.name || server.id;
+        const title = document.createElement("h2");
+        const status = document.createElement("span");
+        header.appendChild(title);
+        header.appendChild(status);
 
-          const status = document.createElement("span");
-          const state = serverStateMap[server.status] || "starting";
-          status.className = `status-pill ${state}`;
-          status.textContent = statusLabels[state] || server.status || "Unknown";
+        const description = document.createElement("p");
+        description.className = "pending";
 
-          header.appendChild(title);
-          header.appendChild(status);
+        const controls = document.createElement("div");
+        controls.className = "controls";
 
-          const description = document.createElement("p");
-          description.className = "pending";
-          description.textContent = server.description || "";
+        card.appendChild(header);
+        card.appendChild(description);
+        card.appendChild(controls);
 
-          const controls = document.createElement("div");
-          controls.className = "controls";
+        const entry = { card, title, status, description, controls, actions: [] };
+        updateCard(entry, server);
+        return entry;
+      };
 
-          (server.actions || []).forEach((action) => {
+      const updateCard = (entry, server) => {
+        const name = server.name || server.id;
+        if (entry.title.textContent !== name) entry.title.textContent = name;
+
+        const state = serverStateMap[server.status] || "starting";
+        const statusClass = `status-pill ${state}`;
+        if (entry.status.className !== statusClass) entry.status.className = statusClass;
+        const statusText = statusLabels[state] || server.status || "Unknown";
+        if (entry.status.textContent !== statusText) entry.status.textContent = statusText;
+
+        const description = server.description || "";
+        if (entry.description.textContent !== description) entry.description.textContent = description;
+
+        const actions = server.actions || [];
+        const actionsChanged =
+          actions.length !== entry.actions.length || actions.some((a, i) => a !== entry.actions[i]);
+        if (actionsChanged) {
+          entry.controls.innerHTML = "";
+          actions.forEach((action) => {
             const button = document.createElement("button");
             button.className = "link-button";
             button.textContent = actionLabels[action] || action;
             button.addEventListener("click", () => runServerAction(server.id, action, button));
-            controls.appendChild(button);
+            entry.controls.appendChild(button);
           });
+          entry.actions = actions;
+        }
+      };
 
-          card.appendChild(header);
-          card.appendChild(description);
-          card.appendChild(controls);
-          serverGrid.appendChild(card);
+      const renderServers = (servers) => {
+        if (!servers.length) {
+          cardsById.forEach((entry) => entry.card.remove());
+          cardsById.clear();
+          if (!emptyCard) {
+            emptyCard = document.createElement("div");
+            emptyCard.className = "card";
+            const message = document.createElement("p");
+            message.className = "pending";
+            message.textContent = "No servers registered.";
+            emptyCard.appendChild(message);
+            serverGrid.appendChild(emptyCard);
+          }
+          return;
+        }
+
+        if (emptyCard) {
+          emptyCard.remove();
+          emptyCard = null;
+        }
+
+        const seen = new Set();
+        servers.forEach((server) => {
+          seen.add(server.id);
+          let entry = cardsById.get(server.id);
+          if (!entry) {
+            entry = buildCard(server);
+            cardsById.set(server.id, entry);
+          } else {
+            updateCard(entry, server);
+          }
+          // appendChild on a node already in the DOM moves it rather than
+          // recreating it, so this keeps ordering in sync with the API
+          // response without retriggering the card's entrance animation.
+          serverGrid.appendChild(entry.card);
+        });
+
+        cardsById.forEach((entry, id) => {
+          if (!seen.has(id)) {
+            entry.card.remove();
+            cardsById.delete(id);
+          }
         });
       };
 
