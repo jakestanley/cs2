@@ -152,6 +152,7 @@
           secondaryHeading,
           primaryActions: [],
           secondaryActions: [],
+          secondaryOffline: null,
         };
       };
 
@@ -163,6 +164,12 @@
           button.textContent = actionLabels[action] || action;
           button.addEventListener("click", () => runServerAction(serverId, action, button));
           container.appendChild(button);
+        });
+      };
+
+      const setControlsDisabled = (container, disabled) => {
+        Array.from(container.children).forEach((button) => {
+          button.disabled = disabled;
         });
       };
 
@@ -193,10 +200,21 @@
           fillControls(entry.primaryControls, primaryActions, server.id);
           entry.primaryActions = primaryActions;
         }
+        // Server-specific controls don't mean anything while the server
+        // itself is offline -- start is still the only useful action at
+        // that point, so grey the rest out rather than let them fail.
+        // Start/stop are deliberately exempt: start is exactly what you
+        // need to click while offline.
+        const isOffline = state === "offline";
         if (!sameActions(secondaryActions, entry.secondaryActions)) {
           fillControls(entry.secondaryControls, secondaryActions, server.id);
           entry.secondaryActions = secondaryActions;
           entry.secondaryHeading.hidden = secondaryActions.length === 0;
+          entry.secondaryOffline = null; // force re-applying disabled state on fresh buttons
+        }
+        if (entry.secondaryOffline !== isOffline) {
+          setControlsDisabled(entry.secondaryControls, isOffline);
+          entry.secondaryOffline = isOffline;
         }
       };
 
