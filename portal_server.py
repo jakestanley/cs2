@@ -64,12 +64,16 @@ class RootRewriteHandler(SimpleHTTPRequestHandler):
             if entry is None:
                 self._send_json(404, {"ok": False, "error": f"unknown server: {server_id}"})
                 return
-            if action not in entry["actions"]:
+            if action not in registry.action_names(entry):
                 self._send_json(400, {"ok": False, "error": f"unsupported action: {action}"})
                 return
+            # Forward whatever the browser actually posted -- e.g. a
+            # parameterized action's param values. The portal never
+            # inspects or validates the body; that's the adapter's job.
+            body = self._read_json_body()
             request = Request(
                 f"{entry['base_url']}/arcade/actions/{action}",
-                data=b"{}",
+                data=json.dumps(body).encode("utf-8"),
                 headers={"Content-Type": "application/json"},
                 method="POST",
             )

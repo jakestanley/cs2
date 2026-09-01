@@ -35,17 +35,30 @@
       // using its raw name as the fallback label.
       const actionLabels = { start: "Start", stop: "Stop" };
 
-      const runServerAction = async (serverId, action, button) => {
+      const runServerAction = async (serverId, action, button, errorEl, body) => {
         button.disabled = true;
         const original = button.textContent;
         button.textContent = "…";
+        if (errorEl) {
+          errorEl.hidden = true;
+          errorEl.textContent = "";
+        }
         try {
           const res = await fetch(`/api/servers/${encodeURIComponent(serverId)}/actions/${encodeURIComponent(action)}`, {
             method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(body || {}),
           });
-          await res.json().catch(() => ({}));
+          const payload = await res.json().catch(() => ({}));
+          if (errorEl && (!res.ok || payload.ok === false)) {
+            errorEl.textContent = payload.error || `${action} failed (HTTP ${res.status})`;
+            errorEl.hidden = false;
+          }
         } catch (err) {
-          // ignore — next poll will reflect real state
+          if (errorEl) {
+            errorEl.textContent = `${action} failed: could not reach the portal`;
+            errorEl.hidden = false;
+          }
         } finally {
           button.disabled = false;
           button.textContent = original;
@@ -75,6 +88,10 @@
         row.className = "list-row";
         row.addEventListener("click", () => {
           selectedId = server.id;
+          if (detailEntry) {
+            detailEntry.error.hidden = true;
+            detailEntry.error.textContent = "";
+          }
           applySelectionHighlight();
           renderDetailForSelected();
         });
@@ -122,6 +139,23 @@
         const description = document.createElement("p");
         description.className = "pending";
 
+        // Adapter-reported live stats -- an opaque ordered list of
+        // {label, value} pairs. The portal never interprets these; it
+        // just renders whatever the adapter sent, so a server with no
+        // stats yet (or an adapter that never adds any) simply shows
+        // nothing here.
+        const statsHeading = document.createElement("div");
+        statsHeading.className = "subtitle section-heading";
+        statsHeading.textContent = "Live Stats";
+        statsHeading.hidden = true;
+
+        const stats = document.createElement("div");
+        stats.className = "status-grid";
+
+        const error = document.createElement("p");
+        error.className = "error";
+        error.hidden = true;
+
         const primaryControls = document.createElement("div");
         primaryControls.className = "controls";
 
@@ -135,9 +169,12 @@
 
         pane.appendChild(header);
         pane.appendChild(description);
+        pane.appendChild(statsHeading);
+        pane.appendChild(stats);
         pane.appendChild(primaryControls);
         pane.appendChild(secondaryHeading);
         pane.appendChild(secondaryControls);
+        pane.appendChild(error);
 
         serverDetail.innerHTML = "";
         serverDetail.appendChild(pane);
@@ -147,22 +184,104 @@
           title,
           status,
           description,
+          statsHeading,
+          stats,
+          error,
           primaryControls,
           secondaryControls,
           secondaryHeading,
           primaryActions: [],
           secondaryActions: [],
           secondaryOffline: null,
+          statsSignature: null,
         };
       };
 
-      const fillControls = (container, actions, serverId) => {
+      // One input builder per fixed primitive param type -- deliberately
+      // not open-ended. An adapter describes *what kind* of value it
+      // wants (enum/boolean/number/string); it never dictates markup or
+      // validation beyond that, so this stays a small closed switch.
+      const PARAM_INPUT_BUILDERS = {
+        enum: (param) => {
+          const select = document.createElement("select");
+          (param.options || []).forEach((opt) => {
+            const option = document.createElement("option");
+            option.value = opt;
+            option.textContent = opt;
+            select.appendChild(option);
+          });
+          if (param.default !== undefined) select.value = param.default;
+          return { el: select, getValue: () => select.value };
+        },
+        boolean: (param) => {
+          const input = document.createElement("input");
+          input.type = "checkbox";
+          input.checked = Boolean(param.default);
+          return { el: input, getValue: () => input.checked };
+        },
+        number: (param) => {
+          const input = document.createElement("input");
+          input.type = "number";
+          if (param.min !== undefined) input.min = param.min;
+          if (param.max !== undefined) input.max = param.max;
+          if (param.default !== undefined) input.value = param.default;
+          return { el: input, getValue: () => input.valueAsNumber };
+        },
+        string: (param) => {
+          const input = document.createElement("input");
+          input.type = "text";
+          if (param.default !== undefined) input.value = param.default;
+          return { el: input, getValue: () => input.value };
+        },
+      };
+
+      // A parameterized action ({name, label, params}) renders as a small
+      // inline form instead of a bare button -- one input per param, an
+      // Apply button that collects the current values into the POST body.
+      // The portal has no idea what any of this means; it just maps
+      // param.type to an input widget.
+      const buildParamAction = (action, serverId, errorEl) => {
+        const wrap = document.createElement("div");
+        wrap.className = "param-action";
+
+        const label = document.createElement("span");
+        label.className = "param-action-label";
+        label.textContent = action.label || action.name;
+        wrap.appendChild(label);
+
+        const getters = [];
+        (action.params || []).forEach((param) => {
+          const build = PARAM_INPUT_BUILDERS[param.type] || PARAM_INPUT_BUILDERS.string;
+          const { el, getValue } = build(param);
+          el.name = param.name;
+          if (param.label) el.title = param.label;
+          wrap.appendChild(el);
+          getters.push(() => [param.name, getValue()]);
+        });
+
+        const button = document.createElement("button");
+        button.className = "link-button";
+        button.textContent = "Apply";
+        button.addEventListener("click", () => {
+          const body = Object.fromEntries(getters.map((get) => get()));
+          runServerAction(serverId, action.name, button, errorEl, body);
+        });
+        wrap.appendChild(button);
+
+        return wrap;
+      };
+
+      const fillControls = (container, actions, serverId, errorEl) => {
         container.innerHTML = "";
         actions.forEach((action) => {
+          if (action && typeof action === "object") {
+            container.appendChild(buildParamAction(action, serverId, errorEl));
+            return;
+          }
           const button = document.createElement("button");
           button.className = "link-button";
           button.textContent = actionLabels[action] || action;
-          button.addEventListener("click", () => runServerAction(serverId, action, button));
+          button.addEventListener("click", () => runServerAction(serverId, action, button, errorEl));
           container.appendChild(button);
         });
       };
@@ -173,7 +292,30 @@
         });
       };
 
-      const sameActions = (a, b) => a.length === b.length && a.every((v, i) => v === b[i]);
+      // Content comparison, not reference -- a parameterized action is an
+      // object freshly re-parsed from JSON every poll, so `===` would
+      // never match even when nothing changed, rebuilding (and resetting)
+      // any in-progress form on every 4s tick.
+      const sameActions = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+
+      const renderStats = (entry, stats) => {
+        const signature = JSON.stringify(stats);
+        if (signature === entry.statsSignature) return;
+        entry.statsSignature = signature;
+        entry.stats.innerHTML = "";
+        stats.forEach((stat) => {
+          const item = document.createElement("div");
+          item.className = "status-item";
+          const value = document.createElement("div");
+          value.textContent = stat.value;
+          const label = document.createElement("span");
+          label.textContent = stat.label;
+          item.appendChild(value);
+          item.appendChild(label);
+          entry.stats.appendChild(item);
+        });
+        entry.statsHeading.hidden = stats.length === 0;
+      };
 
       const updateDetailPane = (entry, server) => {
         const name = server.name || server.id;
@@ -188,6 +330,8 @@
         const description = server.description || "";
         if (entry.description.textContent !== description) entry.description.textContent = description;
 
+        renderStats(entry, server.stats || []);
+
         // Every action a server registers -- and only these, the list
         // view never shows action buttons -- renders here, split into
         // start/stop (always first, always visible in the same spot)
@@ -197,7 +341,7 @@
         const secondaryActions = actions.filter((a) => !PRIMARY_ACTIONS.includes(a));
 
         if (!sameActions(primaryActions, entry.primaryActions)) {
-          fillControls(entry.primaryControls, primaryActions, server.id);
+          fillControls(entry.primaryControls, primaryActions, server.id, entry.error);
           entry.primaryActions = primaryActions;
         }
         // Server-specific controls don't mean anything while the server
@@ -207,7 +351,7 @@
         // need to click while offline.
         const isOffline = state === "offline";
         if (!sameActions(secondaryActions, entry.secondaryActions)) {
-          fillControls(entry.secondaryControls, secondaryActions, server.id);
+          fillControls(entry.secondaryControls, secondaryActions, server.id, entry.error);
           entry.secondaryActions = secondaryActions;
           entry.secondaryHeading.hidden = secondaryActions.length === 0;
           entry.secondaryOffline = null; // force re-applying disabled state on fresh buttons

@@ -29,6 +29,7 @@ heartbeats, not polling this.
   "name": "Palworld",
   "description": "Palworld dedicated server (docker-palworld)",
   "actions": ["start", "stop"],
+  "stats": [],
   "status": "running"
 }
 ```
@@ -36,11 +37,53 @@ heartbeats, not polling this.
 `status` is adapter-defined but should be one of `running`, `stopped`,
 `unknown`.
 
+`stats` (optional, defaults to `[]`) is an ordered list of pre-formatted
+key/value pairs describing the server's current live state:
+
+```json
+"stats": [
+  {"label": "Map", "value": "de_nuke"},
+  {"label": "Mode", "value": "Wingman"},
+  {"label": "Players", "value": "8/10"}
+]
+```
+
+The adapter does all formatting (`"8/10"`, not `{"current": 8, "max": 10}`)
+— the portal stores and renders the list verbatim, with no per-field
+knowledge of what any label means. Omit the field, or send an empty list,
+if a server has nothing to report yet.
+
+`actions` entries are either a bare name (`"start"`) or, for an action that
+takes input, an object:
+
+```json
+{
+  "name": "apply_preset",
+  "label": "Apply preset",
+  "params": [
+    {"name": "preset", "type": "enum", "label": "Preset",
+     "options": ["casual", "competitive"], "default": "casual"}
+  ]
+}
+```
+
+`params[].type` is one of a fixed set the portal knows how to render an
+input for: `enum` (needs `options`), `boolean`, `number` (optional `min`/
+`max`), `string`. `default` is optional. The portal only ever reads an
+action's `name` for routing and validity checks — it never interprets
+`params`; the adapter is responsible for validating submitted values and
+returning `{"ok": false, "error": "..."}` if they're invalid.
+
 ### `POST /arcade/actions/<action>`
 
 Triggers one of the actions the adapter declared. Must be idempotent-safe
 to call when already in the target state (e.g. `start` on an
 already-running server should just report the current status, not error).
+
+For a parameterized action, the request body is whatever the browser sent
+the portal, forwarded verbatim (`{"preset": "casual"}` for the example
+above) — the portal never inspects or validates it. A zero-param action
+receives `{}`.
 
 Response on success (HTTP 200):
 
@@ -70,6 +113,7 @@ Content-Type: application/json
   "description": "Palworld dedicated server (docker-palworld)",
   "base_url": "http://adler:8300",
   "actions": ["start", "stop"],
+  "stats": [],
   "status": "running"
 }
 ```
@@ -94,10 +138,11 @@ Content-Type: application/json
   90s staleness window, in the same shape as the registration payload
   (minus internal bookkeeping fields).
 - `POST /api/servers/<id>/actions/<action>` — looks up the registration,
-  rejects if `action` isn't in its declared `actions`, otherwise forwards
-  `POST {base_url}/arcade/actions/<action>` server-side and relays the
-  adapter's response back to the browser. The browser never talks to an
-  adapter's `base_url` directly — only to the portal.
+  rejects if `action`'s name isn't among its declared `actions`, otherwise
+  forwards `POST {base_url}/arcade/actions/<action>` server-side —
+  including whatever JSON body the browser sent, unmodified — and relays
+  the adapter's response back to the browser. The browser never talks to
+  an adapter's `base_url` directly — only to the portal.
 
 ## Trust model (v1)
 

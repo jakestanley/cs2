@@ -212,6 +212,37 @@ h1 {
   min-width: 0;
 }
 
+/* A parameterized action: label + one input per param + an Apply button,
+   as a single flex item alongside plain-button actions in .controls. */
+.param-action {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 8px 10px;
+  border: 1px solid var(--stroke);
+  border-radius: 12px;
+  background: #ffffff;
+}
+
+.param-action-label {
+  font-weight: 600;
+  font-size: 13px;
+  margin-right: 4px;
+}
+
+.param-action select,
+.param-action input[type="text"],
+.param-action input[type="number"] {
+  width: auto;
+  min-width: 100px;
+  padding: 6px 10px;
+}
+
+.param-action input[type="checkbox"] {
+  width: auto;
+}
+
 button {
   border: none;
   border-radius: 12px;

@@ -26,17 +26,42 @@ def register(payload: dict) -> None:
     actions = payload.get("actions")
     if not isinstance(actions, list):
         actions = []
+    stats = payload.get("stats")
+    if not isinstance(stats, list):
+        stats = []
     entry = {
         "id": server_id,
         "name": str(payload.get("name") or server_id),
         "description": str(payload.get("description") or ""),
         "base_url": base_url.rstrip("/"),
-        "actions": [str(a) for a in actions],
+        "actions": [a for a in (_normalize_action(a) for a in actions) if a is not None],
+        "stats": stats,
         "status": str(payload.get("status") or "unknown"),
         "last_seen": time.time(),
     }
     with _lock:
         _registrations[server_id] = entry
+
+
+def _normalize_action(action) -> str | dict:
+    """An action is either a bare name (str) or a parameterized action
+    (dict with at least a string 'name') -- see docs/ARCADE_CONTRACT.md.
+    Anything else is dropped rather than passed through malformed, since
+    the portal never interprets an action beyond its name."""
+    if isinstance(action, dict):
+        name = action.get("name")
+        return action if isinstance(name, str) and name else None
+    return str(action)
+
+
+def action_names(entry: dict) -> set[str]:
+    """Names only, regardless of whether an entry is a bare string or a
+    parameterized-action dict -- used for the portal's action-validity
+    check, which never needs to look at 'params'."""
+    return {
+        a if isinstance(a, str) else a.get("name")
+        for a in entry.get("actions", [])
+    }
 
 
 def list_active() -> list[dict]:
