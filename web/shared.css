@@ -54,13 +54,60 @@ h1 {
   text-transform: uppercase;
 }
 
-.grid {
+.layout {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: 280px 1fr;
   gap: 18px;
+  align-items: start;
 }
 
-.card {
+.server-list {
+  background: var(--card);
+  border: 1px solid var(--stroke);
+  border-radius: 18px;
+  box-shadow: var(--shadow);
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.list-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.list-row:hover {
+  background: rgba(20, 23, 32, 0.05);
+}
+
+.list-row.selected {
+  background: var(--ink);
+}
+
+.list-row.selected .list-row-name {
+  color: #fff;
+}
+
+.list-row-name {
+  font-weight: 600;
+  font-size: 15px;
+}
+
+/* Compact variant of the status pill for the tighter list-row context --
+   same color classes (.offline/.starting/.live) apply on top of this. */
+.list-row .status-pill {
+  padding: 4px 10px;
+  font-size: 12px;
+}
+
+.detail-pane {
   background: var(--card);
   border: 1px solid var(--stroke);
   border-radius: 18px;
@@ -68,11 +115,7 @@ h1 {
   box-shadow: var(--shadow);
 }
 
-.card.full-width {
-  grid-column: 1 / -1;
-}
-
-.card h2 {
+.detail-pane h2 {
   margin: 0 0 12px;
   font-size: 18px;
 }
@@ -289,14 +332,8 @@ input[type="text"] {
   }
 }
 
-@media (max-width: 1100px) {
-  .grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-}
-
 @media (max-width: 720px) {
-  .grid {
+  .layout {
     grid-template-columns: 1fr;
   }
 }

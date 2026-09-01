@@ -15,16 +15,24 @@
         </div>
       </header>
 
-      <section class="grid" id="server-grid"></section>
+      <section class="layout">
+        <div class="server-list" id="server-list"></div>
+        <div class="server-detail" id="server-detail"></div>
+      </section>
     </div>
     <script>
-      const serverGrid = document.getElementById("server-grid");
+      const serverList = document.getElementById("server-list");
+      const serverDetail = document.getElementById("server-detail");
       const statusLabels = {
         live: "Running",
         starting: "Unknown",
         offline: "Stopped",
       };
       const serverStateMap = { running: "live", stopped: "offline", unknown: "starting" };
+      // Every action a server registers gets a button in the detail pane --
+      // the list itself never shows any controls, only name + status. This
+      // label map is just cosmetic; an action not listed here still renders,
+      // using its raw name as the fallback label.
       const actionLabels = { start: "Start", stop: "Stop" };
 
       const runServerAction = async (serverId, action, button) => {
@@ -45,20 +53,61 @@
         }
       };
 
-      // Keyed by server id so a refresh updates existing cards in place
-      // instead of tearing down and recreating the whole grid — a full
-      // rebuild every poll replayed each card's CSS entrance animation,
-      // making the page visibly "bounce" on every refresh.
-      const cardsById = new Map();
-      let emptyCard = null;
+      // Keyed by server id so a refresh updates existing rows/the detail
+      // pane in place instead of tearing down and recreating them -- a
+      // full rebuild every poll replayed CSS entrance animations, making
+      // the page visibly "bounce" on every refresh (fixed once already
+      // for the old card grid; the same discipline applies here).
+      const rowsById = new Map();
+      let selectedId = null;
+      let lastServers = [];
+      let emptyListMessage = null;
+      let detailEntry = null;
 
-      const buildCard = (server) => {
-        const card = document.createElement("div");
-        card.className = "card";
+      const applySelectionHighlight = () => {
+        rowsById.forEach((entry, id) => {
+          entry.row.classList.toggle("selected", id === selectedId);
+        });
+      };
+
+      const buildListRow = (server) => {
+        const row = document.createElement("div");
+        row.className = "list-row";
+        row.addEventListener("click", () => {
+          selectedId = server.id;
+          applySelectionHighlight();
+          renderDetailForSelected();
+        });
+
+        const title = document.createElement("span");
+        title.className = "list-row-name";
+        const status = document.createElement("span");
+
+        row.appendChild(title);
+        row.appendChild(status);
+
+        const entry = { row, title, status };
+        updateListRow(entry, server);
+        return entry;
+      };
+
+      const updateListRow = (entry, server) => {
+        const name = server.name || server.id;
+        if (entry.title.textContent !== name) entry.title.textContent = name;
+
+        const state = serverStateMap[server.status] || "starting";
+        const statusClass = `status-pill ${state}`;
+        if (entry.status.className !== statusClass) entry.status.className = statusClass;
+        const statusText = statusLabels[state] || server.status || "Unknown";
+        if (entry.status.textContent !== statusText) entry.status.textContent = statusText;
+      };
+
+      const buildDetailPane = () => {
+        const pane = document.createElement("div");
+        pane.className = "detail-pane";
 
         const header = document.createElement("div");
         header.className = "card-header";
-
         const title = document.createElement("h2");
         const status = document.createElement("span");
         header.appendChild(title);
@@ -70,16 +119,17 @@
         const controls = document.createElement("div");
         controls.className = "controls";
 
-        card.appendChild(header);
-        card.appendChild(description);
-        card.appendChild(controls);
+        pane.appendChild(header);
+        pane.appendChild(description);
+        pane.appendChild(controls);
 
-        const entry = { card, title, status, description, controls, actions: [] };
-        updateCard(entry, server);
-        return entry;
+        serverDetail.innerHTML = "";
+        serverDetail.appendChild(pane);
+
+        return { pane, title, status, description, controls, actions: [] };
       };
 
-      const updateCard = (entry, server) => {
+      const updateDetailPane = (entry, server) => {
         const name = server.name || server.id;
         if (entry.title.textContent !== name) entry.title.textContent = name;
 
@@ -92,6 +142,9 @@
         const description = server.description || "";
         if (entry.description.textContent !== description) entry.description.textContent = description;
 
+        // Every action a server registers -- start/stop plus anything
+        // extra (restart_round, backup_now, ...) -- renders here, and
+        // only here. The list view never shows action buttons.
         const actions = server.actions || [];
         const actionsChanged =
           actions.length !== entry.actions.length || actions.some((a, i) => a !== entry.actions[i]);
@@ -108,49 +161,83 @@
         }
       };
 
+      const renderEmptyDetail = (message) => {
+        serverDetail.innerHTML = "";
+        detailEntry = null;
+        const pane = document.createElement("div");
+        pane.className = "detail-pane";
+        const p = document.createElement("p");
+        p.className = "pending";
+        p.textContent = message;
+        pane.appendChild(p);
+        serverDetail.appendChild(pane);
+      };
+
+      const renderDetailForSelected = () => {
+        const server = lastServers.find((s) => s.id === selectedId);
+        if (!server) {
+          renderEmptyDetail("Select a server to see details.");
+          return;
+        }
+        if (!detailEntry) {
+          detailEntry = buildDetailPane();
+        }
+        updateDetailPane(detailEntry, server);
+      };
+
       const renderServers = (servers) => {
+        lastServers = servers;
+
         if (!servers.length) {
-          cardsById.forEach((entry) => entry.card.remove());
-          cardsById.clear();
-          if (!emptyCard) {
-            emptyCard = document.createElement("div");
-            emptyCard.className = "card";
-            const message = document.createElement("p");
-            message.className = "pending";
-            message.textContent = "No servers registered.";
-            emptyCard.appendChild(message);
-            serverGrid.appendChild(emptyCard);
+          rowsById.forEach((entry) => entry.row.remove());
+          rowsById.clear();
+          selectedId = null;
+          if (!emptyListMessage) {
+            emptyListMessage = document.createElement("p");
+            emptyListMessage.className = "pending";
+            emptyListMessage.textContent = "No servers registered.";
+            serverList.appendChild(emptyListMessage);
           }
+          renderEmptyDetail("No servers registered.");
           return;
         }
 
-        if (emptyCard) {
-          emptyCard.remove();
-          emptyCard = null;
+        if (emptyListMessage) {
+          emptyListMessage.remove();
+          emptyListMessage = null;
+        }
+
+        // Default selection to the first server, or fall back to it if
+        // the previously-selected server has disappeared.
+        if (!selectedId || !servers.some((s) => s.id === selectedId)) {
+          selectedId = servers[0].id;
         }
 
         const seen = new Set();
         servers.forEach((server) => {
           seen.add(server.id);
-          let entry = cardsById.get(server.id);
+          let entry = rowsById.get(server.id);
           if (!entry) {
-            entry = buildCard(server);
-            cardsById.set(server.id, entry);
+            entry = buildListRow(server);
+            rowsById.set(server.id, entry);
           } else {
-            updateCard(entry, server);
+            updateListRow(entry, server);
           }
           // appendChild on a node already in the DOM moves it rather than
           // recreating it, so this keeps ordering in sync with the API
-          // response without retriggering the card's entrance animation.
-          serverGrid.appendChild(entry.card);
+          // response without retriggering any entrance animation.
+          serverList.appendChild(entry.row);
         });
 
-        cardsById.forEach((entry, id) => {
+        rowsById.forEach((entry, id) => {
           if (!seen.has(id)) {
-            entry.card.remove();
-            cardsById.delete(id);
+            entry.row.remove();
+            rowsById.delete(id);
           }
         });
+
+        applySelectionHighlight();
+        renderDetailForSelected();
       };
 
       const refreshServers = async () => {
