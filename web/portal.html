@@ -102,6 +102,12 @@
         if (entry.status.textContent !== statusText) entry.status.textContent = statusText;
       };
 
+      // start/stop are always pinned at the top of the detail pane, in a
+      // fixed, stable position -- everything else a server registers is
+      // "server-specific" and goes in its own labeled section below, so
+      // the two are never visually mixed together.
+      const PRIMARY_ACTIONS = ["start", "stop"];
+
       const buildDetailPane = () => {
         const pane = document.createElement("div");
         pane.className = "detail-pane";
@@ -116,18 +122,51 @@
         const description = document.createElement("p");
         description.className = "pending";
 
-        const controls = document.createElement("div");
-        controls.className = "controls";
+        const primaryControls = document.createElement("div");
+        primaryControls.className = "controls";
+
+        const secondaryHeading = document.createElement("div");
+        secondaryHeading.className = "subtitle section-heading";
+        secondaryHeading.textContent = "Server Controls";
+        secondaryHeading.hidden = true;
+
+        const secondaryControls = document.createElement("div");
+        secondaryControls.className = "controls";
 
         pane.appendChild(header);
         pane.appendChild(description);
-        pane.appendChild(controls);
+        pane.appendChild(primaryControls);
+        pane.appendChild(secondaryHeading);
+        pane.appendChild(secondaryControls);
 
         serverDetail.innerHTML = "";
         serverDetail.appendChild(pane);
 
-        return { pane, title, status, description, controls, actions: [] };
+        return {
+          pane,
+          title,
+          status,
+          description,
+          primaryControls,
+          secondaryControls,
+          secondaryHeading,
+          primaryActions: [],
+          secondaryActions: [],
+        };
       };
+
+      const fillControls = (container, actions, serverId) => {
+        container.innerHTML = "";
+        actions.forEach((action) => {
+          const button = document.createElement("button");
+          button.className = "link-button";
+          button.textContent = actionLabels[action] || action;
+          button.addEventListener("click", () => runServerAction(serverId, action, button));
+          container.appendChild(button);
+        });
+      };
+
+      const sameActions = (a, b) => a.length === b.length && a.every((v, i) => v === b[i]);
 
       const updateDetailPane = (entry, server) => {
         const name = server.name || server.id;
@@ -142,22 +181,22 @@
         const description = server.description || "";
         if (entry.description.textContent !== description) entry.description.textContent = description;
 
-        // Every action a server registers -- start/stop plus anything
-        // extra (restart_round, backup_now, ...) -- renders here, and
-        // only here. The list view never shows action buttons.
+        // Every action a server registers -- and only these, the list
+        // view never shows action buttons -- renders here, split into
+        // start/stop (always first, always visible in the same spot)
+        // and everything else (a separate, clearly-labeled section).
         const actions = server.actions || [];
-        const actionsChanged =
-          actions.length !== entry.actions.length || actions.some((a, i) => a !== entry.actions[i]);
-        if (actionsChanged) {
-          entry.controls.innerHTML = "";
-          actions.forEach((action) => {
-            const button = document.createElement("button");
-            button.className = "link-button";
-            button.textContent = actionLabels[action] || action;
-            button.addEventListener("click", () => runServerAction(server.id, action, button));
-            entry.controls.appendChild(button);
-          });
-          entry.actions = actions;
+        const primaryActions = actions.filter((a) => PRIMARY_ACTIONS.includes(a));
+        const secondaryActions = actions.filter((a) => !PRIMARY_ACTIONS.includes(a));
+
+        if (!sameActions(primaryActions, entry.primaryActions)) {
+          fillControls(entry.primaryControls, primaryActions, server.id);
+          entry.primaryActions = primaryActions;
+        }
+        if (!sameActions(secondaryActions, entry.secondaryActions)) {
+          fillControls(entry.secondaryControls, secondaryActions, server.id);
+          entry.secondaryActions = secondaryActions;
+          entry.secondaryHeading.hidden = secondaryActions.length === 0;
         }
       };
 

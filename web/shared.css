@@ -54,6 +54,15 @@ h1 {
   text-transform: uppercase;
 }
 
+/* A .subtitle used inline as a divider between control groups in the
+   detail pane, e.g. separating start/stop from server-specific actions. */
+.section-heading {
+  font-size: 12px;
+  margin: 20px 0 8px;
+  padding-top: 16px;
+  border-top: 1px solid var(--stroke);
+}
+
 .layout {
   display: grid;
   grid-template-columns: 280px 1fr;
