@@ -190,8 +190,8 @@
           primaryControls,
           secondaryControls,
           secondaryHeading,
-          primaryActions: [],
-          secondaryActions: [],
+          primaryActionsKey: null,
+          secondaryActionsKey: null,
           secondaryOffline: null,
           statsSignature: null,
         };
@@ -292,12 +292,6 @@
         });
       };
 
-      // Content comparison, not reference -- a parameterized action is an
-      // object freshly re-parsed from JSON every poll, so `===` would
-      // never match even when nothing changed, rebuilding (and resetting)
-      // any in-progress form on every 4s tick.
-      const sameActions = (a, b) => JSON.stringify(a) === JSON.stringify(b);
-
       const renderStats = (entry, stats) => {
         const signature = JSON.stringify(stats);
         if (signature === entry.statsSignature) return;
@@ -340,9 +334,18 @@
         const primaryActions = actions.filter((a) => PRIMARY_ACTIONS.includes(a));
         const secondaryActions = actions.filter((a) => !PRIMARY_ACTIONS.includes(a));
 
-        if (!sameActions(primaryActions, entry.primaryActions)) {
+        // Keyed on server.id + actions, not just actions -- the detail
+        // pane's DOM is reused across server selections, and two
+        // different servers can declare an identical action list (e.g.
+        // both just ["start", "stop"]). Keying on actions alone left
+        // fillControls skipped on selection change whenever that
+        // happened, so the buttons kept their *previous* server's id
+        // closed over -- clicking Start for server B silently fired
+        // server A's action.
+        const primaryKey = JSON.stringify([server.id, primaryActions]);
+        if (primaryKey !== entry.primaryActionsKey) {
           fillControls(entry.primaryControls, primaryActions, server.id, entry.error);
-          entry.primaryActions = primaryActions;
+          entry.primaryActionsKey = primaryKey;
         }
         // Server-specific controls don't mean anything while the server
         // itself is offline -- start is still the only useful action at
@@ -350,9 +353,10 @@
         // Start/stop are deliberately exempt: start is exactly what you
         // need to click while offline.
         const isOffline = state === "offline";
-        if (!sameActions(secondaryActions, entry.secondaryActions)) {
+        const secondaryKey = JSON.stringify([server.id, secondaryActions]);
+        if (secondaryKey !== entry.secondaryActionsKey) {
           fillControls(entry.secondaryControls, secondaryActions, server.id, entry.error);
-          entry.secondaryActions = secondaryActions;
+          entry.secondaryActionsKey = secondaryKey;
           entry.secondaryHeading.hidden = secondaryActions.length === 0;
           entry.secondaryOffline = null; // force re-applying disabled state on fresh buttons
         }
