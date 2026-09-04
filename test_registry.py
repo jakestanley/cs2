@@ -61,5 +61,22 @@ class RegisterStatsTests(unittest.TestCase):
         self.assertEqual(registry.get("s1")["stats"], [])
 
 
+class RegisterUpdateAvailableTests(unittest.TestCase):
+    def setUp(self):
+        registry._registrations.clear()
+
+    def test_defaults_to_false_when_absent(self):
+        registry.register({"id": "s1", "base_url": "http://x"})
+        self.assertFalse(registry.get("s1")["update_available"])
+
+    def test_true_passes_through(self):
+        registry.register({"id": "s1", "base_url": "http://x", "update_available": True})
+        self.assertTrue(registry.get("s1")["update_available"])
+
+    def test_truthy_non_bool_is_coerced(self):
+        registry.register({"id": "s1", "base_url": "http://x", "update_available": "yes"})
+        self.assertIs(registry.get("s1")["update_available"], True)
+
+
 if __name__ == "__main__":
     unittest.main()

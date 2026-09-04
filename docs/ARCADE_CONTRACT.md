@@ -30,12 +30,26 @@ heartbeats, not polling this.
   "description": "Palworld dedicated server (docker-palworld)",
   "actions": ["start", "stop"],
   "stats": [],
-  "status": "running"
+  "status": "running",
+  "update_available": false
 }
 ```
 
 `status` is adapter-defined but should be one of `running`, `stopped`,
 `unknown`.
+
+`update_available` (optional, defaults to `false`) is a plain boolean: is
+there a newer version of whatever this server runs than what's currently
+deployed? For a server whose compatible version is dictated by an
+upstream vendor rather than chosen by whoever runs it (a live-service
+game like CS2 or Palworld, where an out-of-date server can simply become
+unable to accept current clients), this isn't optional in the way it is
+for e.g. a Minecraft server deliberately pinned to a version. The portal
+never checks for updates itself and never decides to apply one — it only
+displays whatever the adapter last reported, and forwards an `update`
+action call exactly like any other action. An adapter with no concept of
+"update" (or that doesn't care to report it) just omits the field, which
+the portal treats identically to `false`.
 
 `stats` (optional, defaults to `[]`) is an ordered list of pre-formatted
 key/value pairs describing the server's current live state:
@@ -73,6 +87,15 @@ input for: `enum` (needs `options`), `boolean`, `number` (optional `min`/
 action's `name` for routing and validity checks — it never interprets
 `params`; the adapter is responsible for validating submitted values and
 returning `{"ok": false, "error": "..."}` if they're invalid.
+
+`start`, `stop`, and `update` are the three action names the portal's UI
+treats as universal rather than server-specific: pinned together at a
+fixed position, and (unlike every other action) never greyed out while
+the server shows as stopped, since all three are meaningful in that
+state. Any other action name lands in the ordinary "server controls"
+section instead, and is disabled while stopped. None of the three is
+required — an adapter that only implements `start`/`stop` is exactly as
+valid as it always was.
 
 ### `POST /arcade/actions/<action>`
 
@@ -114,7 +137,8 @@ Content-Type: application/json
   "base_url": "http://adler:8300",
   "actions": ["start", "stop"],
   "stats": [],
-  "status": "running"
+  "status": "running",
+  "update_available": false
 }
 ```
 

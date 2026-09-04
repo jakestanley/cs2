@@ -37,6 +37,10 @@ def register(payload: dict) -> None:
         "actions": [a for a in (_normalize_action(a) for a in actions) if a is not None],
         "stats": stats,
         "status": str(payload.get("status") or "unknown"),
+        # Optional -- an adapter that's never heard of update checking
+        # (or one on an old lib-arcade version) just omits it, and the
+        # portal treats that exactly like "no update", never like an error.
+        "update_available": bool(payload.get("update_available")),
         "last_seen": time.time(),
     }
     with _lock:

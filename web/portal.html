@@ -33,7 +33,7 @@
       // the list itself never shows any controls, only name + status. This
       // label map is just cosmetic; an action not listed here still renders,
       // using its raw name as the fallback label.
-      const actionLabels = { start: "Start", stop: "Stop" };
+      const actionLabels = { start: "Start", stop: "Stop", update: "Update" };
 
       const runServerAction = async (serverId, action, button, errorEl, body) => {
         button.disabled = true;
@@ -119,11 +119,16 @@
         if (entry.status.textContent !== statusText) entry.status.textContent = statusText;
       };
 
-      // start/stop are always pinned at the top of the detail pane, in a
-      // fixed, stable position -- everything else a server registers is
-      // "server-specific" and goes in its own labeled section below, so
-      // the two are never visually mixed together.
-      const PRIMARY_ACTIONS = ["start", "stop"];
+      // start/stop/update are always pinned at the top of the detail pane,
+      // in a fixed, stable position -- everything else a server registers
+      // is "server-specific" and goes in its own labeled section below, so
+      // the two are never visually mixed together. update joins start/stop
+      // here (not just "server controls") because it's a baseline action
+      // every lib-arcade adapter gets, same as start/stop, and -- like
+      // start -- it's meaningful even while the server is stopped (see
+      // ARCADE_CONTRACT.md), so it needs the same exemption from the
+      // offline-disable rule below.
+      const PRIMARY_ACTIONS = ["start", "stop", "update"];
 
       const buildDetailPane = () => {
         const pane = document.createElement("div");
@@ -271,7 +276,7 @@
         return wrap;
       };
 
-      const fillControls = (container, actions, serverId, errorEl) => {
+      const fillControls = (container, actions, serverId, errorEl, updateAvailable) => {
         container.innerHTML = "";
         actions.forEach((action) => {
           if (action && typeof action === "object") {
@@ -279,8 +284,19 @@
             return;
           }
           const button = document.createElement("button");
-          button.className = "link-button";
-          button.textContent = actionLabels[action] || action;
+          // Visually flag the update action when the adapter's last
+          // heartbeat reported something to apply -- the portal never
+          // decides this itself, only displays it (see
+          // ARCADE_CONTRACT.md's update_available). Clicking it is always
+          // safe either way; an adapter with nothing to update just
+          // reports back that it was already current.
+          if (action === "update" && updateAvailable) {
+            button.className = "link-button update-available";
+            button.textContent = "Update available";
+          } else {
+            button.className = "link-button";
+            button.textContent = actionLabels[action] || action;
+          }
           button.addEventListener("click", () => runServerAction(serverId, action, button, errorEl));
           container.appendChild(button);
         });
@@ -342,9 +358,13 @@
         // happened, so the buttons kept their *previous* server's id
         // closed over -- clicking Start for server B silently fired
         // server A's action.
-        const primaryKey = JSON.stringify([server.id, primaryActions]);
+        // update_available is part of the key, not just primaryActions --
+        // otherwise the update button's label/highlight would never
+        // refresh once built, since the action list itself doesn't change
+        // when this flag flips.
+        const primaryKey = JSON.stringify([server.id, primaryActions, server.update_available]);
         if (primaryKey !== entry.primaryActionsKey) {
-          fillControls(entry.primaryControls, primaryActions, server.id, entry.error);
+          fillControls(entry.primaryControls, primaryActions, server.id, entry.error, server.update_available);
           entry.primaryActionsKey = primaryKey;
         }
         // Server-specific controls don't mean anything while the server
